@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+
+DEB_CONFIGURE_SCRIPT_ENV += PKG_CONFIG_PATH=/opt/qt4-maemo5/lib/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+DEB_CONFIGURE_SCRIPT := ./autogen.sh
+
+DEB_DH_INSTALL_SOURCEDIR = debian/tmp
+
+common-binary-predeb-arch::
+	./debian/maemo-optify libgq-gconf0

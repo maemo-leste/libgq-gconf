@@ -1,0 +1,56 @@
+libgq (0.2-5+0m5) unstable; urgency=low
+
+  * This entry has been added by BIFH queue processor
+    version has been changed to 0.2-5+0m5
+
+ -- Shane Bradley <shane.bradley@nokia.com>  Fri, 03 Sep 2010 12:36:18 +0300
+
+libgq (0.2-5) unstable; urgency=low
+
+  * Symlink to opt library wasn't being created with a clean install.
+
+ -- Shane Bradley <shane.bradley@nokia.com>  Fri, 03 Sep 2010 12:00:57 +0300
+
+libgq (0.2-4) unstable; urgency=low
+
+  * Optify the packages.
+
+ -- Shane Bradley <shane.bradley@nokia.com>  Thu, 26 Aug 2010 11:44:00 +0300
+
+libgq (0.2-3+0m5) unstable; urgency=low
+
+  * This entry has been added by BIFH queue processor
+    version has been changed to 0.2-3+0m5
+
+ -- Laitinen Vesa-Matti <ext-vesa-matti.laitinen@nokia.com>  Wed, 28 Apr 2010 11:44:00 +0300
+
+libgq (0.2-3) unstable; urgency=low
+
+  * Fix bad dependency
+
+ -- Ville M. Vainio <ville.ma.vainio@nokia.com>  Wed,  3 Feb 2010 18:33:06 +0200
+
+libgq (0.2-2) unstable; urgency=low
+
+  * Use qt4.6, change maintainer
+
+ -- Ville M. Vainio <ville.ma.vainio@nokia.com>  Wed,  3 Feb 2010 15:40:53 +0200
+
+libgq (0.2-1) unstable; urgency=low
+
+  * First release for Fremantle
+
+ -- Ville M. Vainio <ville.ma.vainio@nokia.com>  Mon,  1 Feb 2010 17:48:40 +0200
+
+libgq (0.2) unstable; urgency=low
+
+  * Build fixes.
+
+ -- Marius Vollmer <marius.vollmer@nokia.com>  Wed, 16 Dec 2009 15:56:05 +0200
+
+libgq (0.1) unstable; urgency=low
+
+  * Initial release.
+
+ -- Marius Vollmer <marius.vollmer@nokia.com>  Wed, 16 Dec 2009 15:54:46 +0200
+

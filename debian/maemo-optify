@@ -1,0 +1,447 @@
+#! /usr/bin/perl -w
+
+use strict;
+use Cwd 'getcwd';
+use File::Find;           
+use File::Basename;
+use File::Path;
+
+# Optification
+#
+# The goal of this script is to modify a binary Debian package to
+# install certain files or directories in /opt/maemo instead of in /
+# and create symlinks from their original locations in / to their new
+# locations in /opt/maemo.
+#
+# Which files to 'optify' is decided by a tunable heuristic.  [XXX -
+# explain it here...]
+#
+# Directories and files are optified differently.
+#
+# A directory is optified by putting special code in the preinst
+# script of the package.  No change to the actual package content is
+# made.  This should have the same effect as the user manually moving
+# a directory to a different place and leaving a symlink in the
+# original place.
+#
+# The preinst code carefully moves any existing content of the
+# directory to its new location and then creates the symlink to
+# /opt/maemo.  This is only done if there is no symlink already of
+# course, and thus multiple packages can safely optify the same
+# directories.  Whichever package is installed will create the symlink
+# and unpacking the package will already put the files into the right
+# place.
+#
+# When moving the old directory contents, we need to cope with the
+# complication that sub-directories of it might have been optified
+# already.
+# 
+# A file on the other hand is optified by moving it inside the package
+# to its new location in /opt/maemo/ and adding special code to the
+# postinst script.
+#
+# That special code creates the symlink from the old to the new
+# location, but only if the file isn't already visible in its old
+# location.  It will already be visible if one of its parent
+# directories has been optified in some other package (or by the
+# sysadmin).
+
+my $debug = 0;
+my $verbose = 0;
+
+my $total_count;
+my $total_saved;
+
+my $package_name;
+
+my @optified_dirs;
+my @optified_files;
+
+if ($#ARGV == 1 && $ARGV[0] eq "--raw") {
+    exit (optify_raw ($ARGV[1]));
+} elsif ($#ARGV >= 0) {
+    my $pkg = $ARGV[0];
+    my $dir;
+    
+    if ($#ARGV >= 1) {
+        $dir = $ARGV[1];
+    } else {
+        $dir = "debian/" . $pkg;
+    }
+
+    optify_dir ($dir, $pkg);
+} else {
+    foreach (list_packages ()) {
+        optify_package ($_);
+    }
+}
+
+sub dbg {
+    if ($debug) {
+        print STDERR @_;
+    }
+}
+
+sub vrb {
+    if ($debug || $verbose) {
+        print STDERR @_;
+    }
+}
+
+sub du {
+    my ($dir) = @_;
+
+    my $size = 0;             
+    find(sub { $size += -s if -f $_ }, $dir);
+    return $size;
+}
+
+sub optify_entry {
+    my ($entry) = @_;
+    $entry =~ s,^\./,,;
+    $entry =~ s,^usr\/,,;
+
+    my $opt_entry = "opt/" . $entry;
+    vrb "$entry -> $opt_entry\n";
+
+    if (-d "usr/".$entry) {
+        push (@optified_dirs, $entry);
+    } elsif (-f "usr/".$entry) {
+        push (@optified_files, $entry);
+
+        # mkpath seems to fail when the directory already exists, weird.
+        my $dir = dirname ($opt_entry);
+        if (! -d $dir) {
+            mkpath ($dir) || die $!;
+        }
+        rename ("usr/". $entry, $opt_entry) || die $!;
+    }
+}
+
+sub blacklisted {
+    my ($entry) = @_;
+
+    if (-f $entry) {
+        # Files in /usr are always ok, but others are not.
+        return ! $entry =~ /^\/usr\//;
+    }
+    
+    if (basename ($entry) eq $package_name) {
+        # Directories are OK if they are named after the package.
+        # But be extra extra careful here and check some well-known names
+        # that we positively never ever want to optify.
+        return $package_name eq "bin"
+            || $package_name eq "sbin"
+            || $package_name eq "lib"
+            || $package_name eq "libexec"
+            || $package_name eq "var"
+            || $package_name eq "share"
+            || $package_name eq "X11R6"
+            || $package_name eq "games"
+            || $package_name eq "local"
+            || $package_name eq "src"
+            || $package_name eq "etc"
+            || $package_name eq "boot"
+            || $package_name eq "dev"
+            || $package_name eq "home"
+            || $package_name eq "media"
+            || $package_name eq "mnt"
+            || $package_name eq "opt"
+            || $package_name eq "proc"
+            || $package_name eq "root"
+            || $package_name eq "srv"
+            || $package_name eq "sys"
+            || $package_name eq "syspart"
+            || $package_name eq "tmp";
+    } else {
+        return 1;
+    }
+}
+
+sub consider_entry {
+    my ($entry) = @_;
+
+    dbg "$entry: ";
+
+    my $size = du ($entry);
+
+    if (-l $entry) {
+        dbg "link, nope\n";
+    } elsif (! ($entry eq "." || $entry =~ /^.\/usr/)) {
+        dbg "not in /usr, nope\n";
+    } elsif ($size >= 2048) {
+        if (!blacklisted ($entry)) {
+            dbg "yes, saved $size bytes\n";
+            $total_count += 1;
+            $total_saved += $size;
+            optify_entry ($entry);
+        } elsif (-d $entry) {
+            dbg "not ours, recursing\n";
+            local(*DIR);
+            opendir(DIR, $entry);
+            while ($_ = readdir (DIR)) {
+                next if ($_ eq "." || $_ eq "..");
+                consider_entry ($entry . "/" . $_);
+            }
+            closedir(DIR);
+        }
+    } else {
+        dbg "only $size bytes, nope\n";
+    }
+}
+
+sub optify_dir {
+    my ($dir, $pkg) = @_;
+
+    $package_name = $pkg;
+    $total_count = 0;
+    $total_saved = 0;
+    @optified_dirs = ();
+    @optified_files = ();
+
+    dbg "package: $package_name\n";
+
+    my $olddir = getcwd();
+    chdir ($dir) || die "Cannot chdir to $dir\n";
+
+    consider_entry (".");
+    patch_maintainer_scripts (@optified_dirs);
+
+    my $total_kb_saved = int ($total_saved / 1024);
+    print "$pkg: optified $total_count entries, saving about $total_kb_saved kB.\n";
+
+    chdir ($olddir) || die "Can't chdir back to $olddir";
+
+    return 0;
+}
+
+sub emit_optification {
+    my ($out, $what) = @_;
+
+    print $out "\n";
+    print $out "# Added by maemo-optify, with apologies.\n";
+    print $out "\n";
+    print $out q~
+optify_dir () {
+    f="$1"
+
+    ff="$OPTIFY_FROM/$f"
+    tf="$OPTIFY_TO/$f"
+
+    if [ ! -e "$ff" ]; then
+      # It doesn't exist yet; just create the symlink.
+      echo "Optifying $ff" >&2
+      mkdir -p "$tf" &&
+      ln -s "$tf" "$ff"
+      return;
+    fi
+
+    if [ -h "$ff" ]; then
+      # It's a symlink already; check where it points and maybe warn
+      # about it.
+      t=$(readlink "$ff")
+      if [ "$t" != "$tf" ]; then
+        echo "Warning: strange symlink found during optification: $ff -> $t" >&2
+      else
+        echo "Already optified: $ff" >&2
+      fi
+      return;
+    fi;
+
+    if [ -e "$tf" ]; then
+      # The destination exists.  If it is the same as the source, we are done.
+      fs=$(stat "$ff" | grep "Device:")
+      ts=$(stat "$tf" | grep "Device:")
+      if [ "$fs" = "$ts" ]; then
+        echo "Already optified: $ff" >&2
+        return
+      fi
+    fi
+
+    if [ -d "$ff" ]; then
+      # It's a regular directory; we just copy everything over and
+      # replace the source with a symlink to the destination.  While
+      # copying, we have to omit symlinks that point into /opt/maemo
+      # already.
+      #
+      # Any of the distination files might exist.  In that case, tar
+      # will fail, which is the right thing, since we don't want to
+      # overwrite anything.  
+      #
+      # XXX - However, this also means that this is not restartable.
+
+      echo "Optifying non-empty directory $ff" >&2
+
+      (cd "$OPTIFY_FROM" && find "$f" -type l) |
+      (while read l; do
+        t=$(readlink "$OPTIFY_FROM/$l"); [ "$t" = "$OPTIFY_TO/$l" ] && echo "$l";
+      done) >/tmp/excludes
+
+      (cd "$OPTIFY_FROM" && tar cf - -X /tmp/excludes "$f") | (cd "$OPTIFY_TO" && tar xf -) &&
+      mv "$ff" "$ff.removed" &&
+      ln -s "$tf" "$ff" &&
+      rm -rf "$ff.removed"
+      rc=$?
+
+      rm /tmp/excludes
+
+      if [ $rc -ne 0 ]; then exit $rc; fi
+      return;
+    fi
+
+    # It exists but it isn't something we recognize, maybe a file.
+    # Don't do anything and let dpkg deal with it.
+    echo "Warning: not a directory: $ff" >&2
+}
+optify_file () {
+    f="$1"
+
+    ff="$OPTIFY_FROM/$f"
+    tf="$OPTIFY_TO/$f"
+
+    ln -s "$tf" "$ff"
+}
+optify_remove () {
+    f="$1"
+    
+    ff="$OPTIFY_FROM/$f"
+    tf="$OPTIFY_TO/$f"
+    
+    if [ -h "$ff" ]; then
+      rm "$ff"
+    else
+      echo "Optify: $ff is not a symlink, not removing it".
+    fi
+}
+~;
+    print $out "OPTIFY_FROM=\"/usr\"\n";
+    print $out "OPTIFY_TO=\"/opt\"\n";
+    print $out "\n";
+
+    foreach my $func (keys %{$what}) {
+        my $elements = $what->{$func};
+        if (@{$elements}) {
+            print $out "\n";
+        }
+    }
+
+    foreach my $func (keys %{$what}) {
+        my $elements = $what->{$func};
+        foreach (@{$elements}) {
+            print $out "$func \"$_\"\n";
+        }
+    }
+}
+
+sub patch_maintainer_script {
+    my ($maint, $atfront, $what) = @_;
+
+    my $work_to_do;
+    foreach my $func (keys %{$what}) {
+        my $elements = $what->{$func};
+        if (@{$elements}) {
+            $work_to_do = 1;
+            last;
+        }
+    }
+
+    if (!$work_to_do) {
+        return;
+    }
+
+    open my $out, ">", "DEBIAN/$maint.tmp" or die "$!";
+
+    if (! -f "DEBIAN/$maint") {
+        dbg "$maint doesn't exist, creating\n";
+        print $out "#! /bin/sh\n\n";
+        emit_optification ($out, $what);
+    } else {
+        open IN, "<", "DEBIAN/$maint";
+
+        my $is_shell_script;
+        
+        while (<IN>) {
+            if ($_ =~ m,^#![ ]*/bin/sh,
+                || $_ =~ m,^#![ ]*/bin/bash,
+                ||$_ =~ m,^#![ ]*/bin/dash,) 
+            {
+                $is_shell_script = 1;
+                print $out $_;
+                if ($atfront) {
+                    emit_optification ($out, $what);
+                    print $out "\n";
+                    print $out "# The original $maint script resumes here.\n";
+                }
+            } elsif (/^optify/) {
+                vrb "$package_name: $maint already contains optification, leaving it alone.\n";
+                close ($out);
+                unlink ("DEBIAN/$maint.tmp");
+                return;
+            } else {
+                print $out $_;
+            }
+        }
+        close (IN);
+        if (!$is_shell_script) {
+            print STDERR "$package_name: $maint is not a shell script, but needs optification.\n";
+            close ($out);
+            unlink ("DEBIAN/$maint.tmp");
+            exit 1;
+        }
+        if (!$atfront) {
+            emit_optification ($out, $what);
+        }
+    }
+
+    close ($out) || die $!;
+    chmod 0755, "DEBIAN/$maint.tmp";
+    rename ("DEBIAN/$maint.tmp", "DEBIAN/$maint") || die $!;
+}
+
+sub patch_maintainer_scripts {
+    patch_maintainer_script ("preinst", 1,
+                             { "optify_dir" => \@optified_dirs
+                             });
+    patch_maintainer_script ("postinst", 1,
+	                     { "optify_file" => \@optified_files
+                             });
+
+    patch_maintainer_script ("postrm", 0,
+                             { "optify_remove" => \@optified_files
+                             });
+}
+
+sub optify_raw {
+     my ($dir) = @_;
+
+     chdir ($dir) || die "Cannot chdir to $dir\n";
+     
+     my $pkg = basename (getcwd ());
+     $pkg =~ s/_.*$//;
+
+     optify_dir (".", $pkg);
+}
+
+sub list_packages {
+    # XXX - Use some debhelper module for this maybe.
+    my @packages = ();
+
+    open IN, "<", "debian/control" or die "Can't read debian/control";
+    while (<IN>) {
+        if (/^Package: +(.*)\n/) {
+            push (@packages, $1);
+        }
+    }
+    close IN;
+    return @packages;
+}
+
+sub optify_package {
+    my ($pkg) = @_;
+
+    optify_dir ("debian/" . $pkg, $pkg);
+}
+
+
+
+
