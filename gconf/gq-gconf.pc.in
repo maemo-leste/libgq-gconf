@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: gq-gconf
 Description: Qt/GConf wrapper
 Version: @VERSION@
-Requires: QtCore
+Requires: Qt5Core
 Libs: -L${libdir} -lgq-gconf
 Cflags: -I${includedir}/gq

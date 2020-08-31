@@ -1,4 +1,4 @@
-AM_CXXFLAGS = $(QT_CFLAGS) $(GLIB_CFLAGS) $(GCONF_CFLAGS)
+AM_CXXFLAGS = $(QT_CFLAGS) $(GLIB_CFLAGS) $(GCONF_CFLAGS) -fPIC
 LIBS += $(QT_LIBS) $(GLIB_LIBS) $(GCONF_LIBS)
 
 lib_LTLIBRARIES = libgq-gconf.la
@@ -7,6 +7,7 @@ libgq_gconf_la_SOURCES = GConfItem \
                          gconfitem.h \
                          gconfitem.cpp \
                          gconfitem_moc.cpp
+libgq_gconf_la_LDFLAGS = -Wl,--as-needed -module -avoid-version
 
 gqincludedir=$(includedir)/gq
 gqinclude_HEADERS = gconfitem.h GConfItem
@@ -29,7 +30,7 @@ EXTRA_DIST = run-test-gconf
 # Moccing
 
 %_moc.cpp: %.h
-	$(MOC) -o "$@" "$<"
+	moc -o "$@" "$<"
 
 clean-moc:
 	rm -f *_moc.cpp *_moc.lo

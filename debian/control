@@ -1,8 +1,8 @@
 Source: libgq
 Section: libs
 Priority: extra
-Maintainer: Ville M. Vainio <ville.ma.vainio@nokia.com> 
-Build-Depends: debhelper (>= 5), libqt4-dev, doxygen, libgconf2-dev, libglib2.0-dev, cdbs
+Maintainer: Merlijn Wajer <merlijn@wizzup.org>
+Build-Depends: debhelper (>= 5), qtbase5-dev, doxygen, libgconf2-dev, libglib2.0-dev
 Standards-Version: 3.6.2
 
 Package: libgq-gconf0
@@ -25,7 +25,7 @@ Description: a Qt wrapper for GConf
 
 Package: libgq-gconf-dev
 Architecture: any
-Depends: libgq-gconf0 (= ${binary:Version}), libqt4-dev, libgconf2-dev
+Depends: libgq-gconf0 (= ${binary:Version}), qtbase5-dev, libgconf2-dev
 Description: a Qt wrapper for GConf
  This library contains the GConfItem class, for easy
  access to GConf from Qt programs.
