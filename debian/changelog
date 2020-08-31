@@ -1,3 +1,9 @@
+libgq (0.3) unstable; urgency=low
+
+  * Port to Maemo Leste / Qt 5
+
+ -- Merlijn Wajer <merlijn@wizzup.org>  Mon, 31 Aug 2020 11:18:03 +0200
+
 libgq (0.2-5+0m5) unstable; urgency=low
 
   * This entry has been added by BIFH queue processor
