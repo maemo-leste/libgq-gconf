@@ -2,7 +2,12 @@ Source: libgq
 Section: libs
 Priority: extra
 Maintainer: Merlijn Wajer <merlijn@wizzup.org>
-Build-Depends: debhelper (>= 5), qtbase5-dev, doxygen, libgconf2-dev, libglib2.0-dev
+Build-Depends: debhelper (>= 10),
+    qtbase5-dev,
+    doxygen,
+    libgconf2-dev,
+    libglib2.0-dev,
+    qt5-default,
 Standards-Version: 3.6.2
 
 Package: libgq-gconf0
