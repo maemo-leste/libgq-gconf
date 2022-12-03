@@ -6,8 +6,7 @@ Build-Depends: debhelper (>= 10),
     qtbase5-dev,
     doxygen,
     libgconf2-dev,
-    libglib2.0-dev,
-    qt5-default,
+    libglib2.0-dev
 Standards-Version: 3.6.2
 
 Package: libgq-gconf0
